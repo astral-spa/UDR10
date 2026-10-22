@@ -31,7 +31,15 @@ repository e non sono raggiungibili dall'indirizzo del sito. La pagina non mostr
 
 **Da GitHub**: *Add file → Upload files*, trascina il nuovo zip GTFS e fai *Commit changes* su `main`.
 Il workflow *Pubblica sito mappe* rigenera e ripubblica il sito in un paio di minuti (scheda *Actions*).
-Il sito usa lo zip più recente presente nella radice del repo.
+
+**Un nuovo GTFS si può caricare in anticipo.** Il sito usa tutti gli zip presenti nella radice del repo: ogni GTFS
+sostituisce il precedente a partire dalla data di avvio del suo calendario (la `start_date` più bassa di
+`calendar.txt`). Scegliendo un giorno precedente si vede l'orario in vigore prima, da quella data in poi quello nuovo;
+la pagina passa da sola all'orario giusto quando si cambia giorno. Se due zip hanno la stessa data di avvio vale quello
+caricato per ultimo. I vecchi zip si possono cancellare quando il loro periodo è passato; uno zip lasciato nella radice
+con una data di avvio più recente sostituisce l'orario da quella data in poi.
+
+Senza argomento lo script usa tutti gli zip della radice; con un percorso usa solo quel GTFS.
 
 **Dal computer** (serve solo Python 3):
 
