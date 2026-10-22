@@ -1187,7 +1187,7 @@ function renderOverview() {
     <h2>Quadro delle linee</h2>
     <p class="note">Seleziona una linea dall'elenco, dalla mappa o dalla tabella per vederne percorso e orari. Tocca una fermata sulla mappa per le partenze del giorno scelto. ${esc(cap(itLong(state.day)))} circolano <b>${totToday}</b> corse.</p>
     <div class="tbl-scroll"><table class="summary"><thead><tr><th>Linea</th><th>Percorso</th>
-    ${svcs.map(s => `<th title="${esc(s)}">${esc(SVC[s].label)}</th>`).join("")}
+    ${svcs.map(s => `<th>${esc(SVC[s].label)}</th>`).join("")}
     <th>Corse nel giorno</th><th>Km max</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   $("#pannello tbody").addEventListener("click", e => { const tr = e.target.closest("tr"); if (tr) go(tr.dataset.line); });
 }
@@ -1646,11 +1646,11 @@ $("#giorno").addEventListener("change", e => {
 /* ---------- avvio ---------- */
 (function init() {
   $("#sottotitolo").textContent = `${D.agenzia.nome} · orario dal ${itDate(D.feed.dal)} al ${itDate(D.feed.al)}`;
-  $("#piede").innerHTML = `Dati: feed GTFS «${esc(D.feed.file)}»${D.feed.versione ? ` (${esc(D.feed.versione)})` : ""}. ${LINEE.length} linee, ` +
+  $("#piede").innerHTML = `Orario valido dal ${itDate(D.feed.dal)} al ${itDate(D.feed.al)}. ${LINEE.length} linee, ` +
     `${LINEE.reduce((n, l) => n + l.tab.reduce((m, t) => m + t.corse.length, 0), 0)} corse, ${stopUse.filter(u => u.length).length} fermate servite. ` +
     `Informazioni: ${esc(D.agenzia.nome)}${D.agenzia.tel ? `, telefono <span style="user-select:all">${esc(D.agenzia.tel)}</span>` : ""}` +
     (D.agenzia.url ? `, <a href="${esc(D.agenzia.url)}" target="_blank" rel="noopener">${esc(D.agenzia.url.replace(/^https?:\/\//, "").replace(/\/$/, ""))}</a>` : "") +
-    `. Mappe © Esri e fornitori. ${esc(D.nota_principali || "")}`;
+    `. Mappe © Esri e fornitori.`;
   state.onlyMain = store.get("udr10-soloPrinc") !== "0";
   const today = ymd(new Date());
   state.day = today >= D.feed.dal && today <= D.feed.al ? today : D.feed.dal;
