@@ -4,8 +4,11 @@
 Uso:
     python3 sito-mappe/build_data.py [percorso_gtfs.zip]
 
-Senza argomento usa lo zip GTFS nella radice del repo; se ce n'è più di uno,
-quello aggiunto/modificato per ultimo (secondo git, altrimenti per data file).
+Senza argomento usa tutti gli zip GTFS nella radice del repo. Ogni GTFS vale dalla data
+di inizio del suo calendario (start_date più bassa di calendar.txt) fino al giorno prima
+dell'inizio del GTFS successivo: così un nuovo GTFS si può caricare subito e le sue
+modifiche si vedono solo scegliendo un giorno dalla sua data di validità in poi.
+A parità di data di inizio vale lo zip caricato per ultimo (secondo git, altrimenti per data file).
 
 Riempie sito-mappe/template.html con i dati e scrive due copie identiche del sito,
 un unico file HTML autonomo: sito-mappe/index.html (pubblicato online) e index.html
@@ -51,6 +54,7 @@ GIORNI = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato",
 
 
 def find_gtfs():
+    """Zip GTFS della radice del repo -> [(data_inizio, percorso)] ordinati per data, uno per data."""
     zips = glob.glob(os.path.join(ROOT, "*.zip"))
     if not zips:
         raise SystemExit("Nessun file .zip GTFS trovato nella radice del repo.")
@@ -63,16 +67,29 @@ def find_gtfs():
         except OSError:
             return 0
 
-    def calendar_end(path):
-        # a parità di commit (zip caricati insieme) vince il GTFS con il calendario che finisce più tardi
+    def calendar_range(path):
         try:
             zf = zipfile.ZipFile(path)
-            ends = [c["end_date"] for c in read(zf, "calendar.txt")] + [c["date"] for c in read(zf, "calendar_dates.txt")]
-            return max(ends) if ends else ""
+            cal = read(zf, "calendar.txt")
+            starts = [c["start_date"] for c in cal] or [c["date"] for c in read(zf, "calendar_dates.txt")]
+            ends = [c["end_date"] for c in cal] + [c["date"] for c in read(zf, "calendar_dates.txt")]
+            return (min(starts), max(ends)) if starts else None
         except (zipfile.BadZipFile, KeyError):
-            return ""
+            return None
 
-    return max(zips, key=lambda z: (committed(z), calendar_end(z), os.path.getmtime(z)))
+    per_data = {}
+    for z in zips:
+        rng = calendar_range(z)
+        if not rng:
+            print(f"Ignorato (non è un GTFS con calendario): {os.path.basename(z)}")
+            continue
+        # a parità di data di inizio vince lo zip caricato per ultimo, poi quello che finisce più tardi
+        key = (committed(z), rng[1], os.path.getmtime(z))
+        if rng[0] not in per_data or key > per_data[rng[0]][0]:
+            per_data[rng[0]] = (key, z)
+    if not per_data:
+        raise SystemExit("Nessun GTFS valido nella radice del repo.")
+    return sorted((d, z) for d, (_, z) in per_data.items())
 
 
 def read(zf, name):
@@ -185,7 +202,8 @@ def ymd(d):
     return d.strftime("%Y%m%d")
 
 
-def build(zpath):
+def build(zpath, inizio="00000000", fine="99999999"):
+    """Dati del sito per un GTFS, con i calendari limitati al periodo inizio–fine (inclusi)."""
     zf = zipfile.ZipFile(zpath)
     agency = (read(zf, "agency.txt") or [{}])[0]
     routes = read(zf, "routes.txt")
@@ -221,7 +239,7 @@ def build(zpath):
     used_svc = sorted({t["service_id"] for t in trips})
     servizi = {}
     for s in used_svc:
-        ds = sorted(dates[s])
+        ds = sorted(d for d in dates[s] if inizio <= d <= fine)
         if not ds:
             continue
         wd = {datetime.datetime.strptime(d, "%Y%m%d").weekday() for d in ds}
@@ -233,6 +251,8 @@ def build(zpath):
         if labels[v["label"]] > 1:
             v["label"] += f" ({s})"
     trips = [t for t in trips if t["service_id"] in servizi]
+    if not trips:
+        return None
 
     # ---- fermate usate
     used_stops = sorted({r["stop_id"] for t in trips for r in st_by_trip[t["trip_id"]]},
@@ -293,7 +313,7 @@ def build(zpath):
         "agenzia": {"nome": agency.get("agency_name", ""), "url": agency.get("agency_url", ""),
                     "tel": agency.get("agency_phone", "")},
         # nel sito pubblicato non compaiono il nome del file GTFS né dettagli tecnici
-        "feed": {"dal": min(all_dates), "al": max(all_dates)},
+        "periodo": {"dal": min(all_dates), "al": max(all_dates)},
         "servizi": servizi, "fermate": fermate, "shapes": shapes, "shape_km": shape_km, "linee": linee,
     }
 
@@ -365,12 +385,36 @@ def make_tab(svc, d, ts, st_by_trip, stops, stop_idx, route_lines):
 
 
 def main():
-    zpath = sys.argv[1] if len(sys.argv) > 1 else find_gtfs()
-    print(f"GTFS: {os.path.basename(zpath)}")
-    data = build(zpath)
+    if len(sys.argv) > 1:
+        versioni = [("00000000", sys.argv[1])]
+    else:
+        versioni = find_gtfs()
+    dati = []
+    for i, (inizio, zpath) in enumerate(versioni):
+        fine = "99999999"
+        if i + 1 < len(versioni):
+            fine = ymd(datetime.datetime.strptime(versioni[i + 1][0], "%Y%m%d").date() - datetime.timedelta(days=1))
+        data = build(zpath, inizio, fine)
+        if not data:
+            print(f"GTFS: {os.path.basename(zpath)} — nessun giorno di servizio nel periodo, ignorato")
+            continue
+        data["file"] = os.path.basename(zpath)  # solo per il messaggio qui sotto, tolto prima di scrivere il sito
+        dati.append(data)
+    if not dati:
+        raise SystemExit("Nessun GTFS con giorni di servizio.")
+    # ogni versione copre i giorni fino all'inizio della successiva (domeniche comprese)
+    for a, b in zip(dati, dati[1:]):
+        a["periodo"]["al"] = ymd(datetime.datetime.strptime(b["periodo"]["dal"], "%Y%m%d").date() - datetime.timedelta(days=1))
+    feed = {"dal": dati[0]["periodo"]["dal"], "al": dati[-1]["periodo"]["al"]}
+    for d in dati:
+        d["feed"] = feed
+        n = sum(len(t["corse"]) for l in d["linee"] for t in l["tab"])
+        print(f"GTFS: {d.pop('file')} — in vigore dal {d['periodo']['dal']} al {d['periodo']['al']}: "
+              f"{len(d['linee'])} linee, {len(d['fermate'])} fermate, {n} corse")
+
     with open(os.path.join(HERE, "template.html"), encoding="utf-8") as f:
         html = f.read()
-    blob = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
+    blob = json.dumps(dati, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
     with open(os.path.join(HERE, "logo.png"), "rb") as f:  # logo incluso nella pagina: online va solo index.html
         logo = "data:image/png;base64," + base64.b64encode(f.read()).decode()
     for old, new in (("/*DATI*/null", blob), ("/*TITOLO*/", TITOLO), ("/*LOGO*/", logo)):
@@ -380,9 +424,7 @@ def main():
     for out in (os.path.join(HERE, "index.html"), os.path.join(ROOT, "index.html")):
         with open(out, "w", encoding="utf-8") as f:
             f.write(html)
-    n = sum(len(t["corse"]) for l in data["linee"] for t in l["tab"])
-    print(f"index.html: {len(html.encode()) / 1024:.0f} KB — {len(data['linee'])} linee, {len(data['fermate'])} fermate, "
-          f"{n} corse, dal {data['feed']['dal']} al {data['feed']['al']}")
+    print(f"index.html: {len(html.encode()) / 1024:.0f} KB — {len(dati)} orari, dal {feed['dal']} al {feed['al']}")
 
 
 if __name__ == "__main__":
