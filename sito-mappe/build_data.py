@@ -32,6 +32,12 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, ".."))
 TITOLO = "Rete bus UdR 10"
 
+# Contatore visite GoatCounter: il codice è il nome scelto all'iscrizione (https://CODICE.goatcounter.com).
+# Vuoto = nessun contatore. Tutte le visite vanno su un unico percorso, senza distinguere linea
+# (#linea-…) o giorno (?giorno=…). Aprendo il file in locale (doppio clic) le visite non si contano.
+GOATCOUNTER = "andreaantonini"
+GOATCOUNTER_PERCORSO = "/UDR10"
+
 # raggruppamento delle linee per comune (dal prefisso del codice linea)
 COMUNI = {
     "AN": "Anzio", "AP": "Aprilia", "AR": "Ardea", "CI": "Cisterna di Latina", "CO": "Cori",
@@ -417,7 +423,12 @@ def main():
     blob = json.dumps(dati, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
     with open(os.path.join(HERE, "logo.png"), "rb") as f:  # logo incluso nella pagina: online va solo index.html
         logo = "data:image/png;base64," + base64.b64encode(f.read()).decode()
-    for old, new in (("/*DATI*/null", blob), ("/*TITOLO*/", TITOLO), ("/*LOGO*/", logo)):
+    contatore = ""
+    if GOATCOUNTER:
+        contatore = ('<script>window.goatcounter = { path: () => %s, title: %s };</script>\n'
+                     '<script data-goatcounter="https://%s.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>'
+                     % (json.dumps(GOATCOUNTER_PERCORSO), json.dumps(TITOLO), GOATCOUNTER))
+    for old, new in (("/*DATI*/null", blob), ("/*TITOLO*/", TITOLO), ("/*LOGO*/", logo), ("<!--CONTATORE-->", contatore)):
         if old not in html:
             raise SystemExit(f"Segnaposto {old} non trovato in template.html")
         html = html.replace(old, new)

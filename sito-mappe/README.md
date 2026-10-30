@@ -49,3 +49,11 @@ Senza argomento lo script usa tutti gli zip della radice; con un percorso usa so
 ```bash
 python3 sito-mappe/build_data.py [percorso/GTFS.zip]
 ```
+
+## Contatore visite
+
+Il sito conta le visite con [GoatCounter](https://www.goatcounter.com/) sull'account `andreaantonini`
+(pannello: <https://andreaantonini.goatcounter.com>). Tutte le visite finiscono su un unico percorso, `/UDR10`,
+senza distinguere la linea aperta (`#linea-…`) o il giorno scelto (`?giorno=…`). Le aperture del file in locale
+(doppio clic) non vengono contate. Codice dell'account e percorso sono in testa a `build_data.py`
+(`GOATCOUNTER`, `GOATCOUNTER_PERCORSO`); con `GOATCOUNTER = ""` il contatore è spento.
