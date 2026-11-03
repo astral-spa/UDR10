@@ -38,6 +38,11 @@ TITOLO = "Rete bus UdR 10"
 GOATCOUNTER = "andreaantonini"
 GOATCOUNTER_PERCORSO = "/UDR10"
 
+# proxy del tempo reale (Cloudflare Worker, codice in UDR11/proxy-realtime): ritardi delle corse di oggi,
+# abbinate col trip_id del GTFS. Nel Worker AGENCY_ID deve comprendere UdR10AutolineeTroiani.
+# Vuoto = sito con i soli orari programmati.
+REALTIME = "https://udr-realtime.antonini1971.workers.dev"
+
 # raggruppamento delle linee per comune (dal prefisso del codice linea)
 COMUNI = {
     "AN": "Anzio", "AP": "Aprilia", "AR": "Ardea", "CI": "Cisterna di Latina", "CO": "Cori",
@@ -356,7 +361,10 @@ def make_tab(svc, d, ts, st_by_trip, stops, stop_idx, route_lines):
         o = [None] * len(rows)
         for key, r in zip(k, st_by_trip[t["trip_id"]]):
             o[pos[key]] = minutes(r["departure_time"] or r["arrival_time"])
-        corse.append({"id": t.get("trip_short_name") or t["trip_id"], "shape": t["shape_id"], "o": o})
+        corsa = {"id": t.get("trip_short_name") or t["trip_id"], "shape": t["shape_id"], "o": o}
+        if corsa["id"] != t["trip_id"]:
+            corsa["tid"] = t["trip_id"]  # trip_id del GTFS, per abbinare i dati in tempo reale
+        corse.append(corsa)
 
     # fermate principali (il GTFS non le indica: timepoint è sempre 1)
     princ = [0] * len(rows)
@@ -428,7 +436,8 @@ def main():
         contatore = ('<script>window.goatcounter = { path: () => %s, title: %s };</script>\n'
                      '<script data-goatcounter="https://%s.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>'
                      % (json.dumps(GOATCOUNTER_PERCORSO), json.dumps(TITOLO), GOATCOUNTER))
-    for old, new in (("/*DATI*/null", blob), ("/*TITOLO*/", TITOLO), ("/*LOGO*/", logo), ("<!--CONTATORE-->", contatore)):
+    for old, new in (("/*DATI*/null", blob), ("/*TITOLO*/", TITOLO), ("/*LOGO*/", logo), ("<!--CONTATORE-->", contatore),
+                     ('/*REALTIME*/""', json.dumps(REALTIME))):
         if old not in html:
             raise SystemExit(f"Segnaposto {old} non trovato in template.html")
         html = html.replace(old, new)
