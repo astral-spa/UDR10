@@ -32,6 +32,10 @@ Il GTFS non indica le fermate principali (`timepoint` è sempre 1): sono conside
 la prima fermata in ogni comune, i nodi serviti da almeno 4 altre linee e una fermata almeno ogni 5 minuti
 di viaggio (parametri in testa a `build_data.py`).
 
+**Corse senza direzione**: se nel GTFS una corsa non ha `direction_id` (come le due nuove corse della linea AR2
+del GTFS dal 23/11), la direzione si ricava dalle altre corse della stessa linea che fanno le stesse fermate nello
+stesso ordine (`deduci_direzioni` in `build_data.py`); l'esito è scritto nel log della pubblicazione.
+
 ## File
 
 - `template.html`: grafica e funzioni del sito, con i segnaposto per i dati.

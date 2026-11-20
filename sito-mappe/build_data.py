@@ -213,6 +213,27 @@ def ymd(d):
     return d.strftime("%Y%m%d")
 
 
+def deduci_direzioni(trips, st_by_trip):
+    """Corse senza direction_id nel GTFS: la direzione è quella delle altre corse della stessa linea che
+    percorrono le stesse fermate nello stesso ordine (coppie di fermate consecutive concordi o opposte).
+    Senza riscontri restano nella direzione 0, come prima."""
+    coppie = defaultdict(Counter)   # (linea, direzione) -> coppie di fermate consecutive
+    for t in trips:
+        d = (t.get("direction_id") or "").strip()
+        if d:
+            seq = [r["stop_id"] for r in st_by_trip[t["trip_id"]]]
+            coppie[(t["route_id"], d)].update(zip(seq, seq[1:]))
+    for t in trips:
+        if (t.get("direction_id") or "").strip():
+            continue
+        seq = [r["stop_id"] for r in st_by_trip[t["trip_id"]]]
+        punti = {d: sum(c[(a, b)] - c[(b, a)] for a, b in zip(seq, seq[1:]))
+                 for (rid, d), c in coppie.items() if rid == t["route_id"]}
+        if punti and max(punti.values()) > 0:
+            t["direction_id"] = max(punti, key=punti.get)
+            print(f"  direzione dedotta {t['direction_id']} per la corsa {t['trip_id']} (linea {t['route_id']})")
+
+
 def build(zpath, inizio="00000000", fine="99999999"):
     """Dati del sito per un GTFS, con i calendari limitati al periodo inizio–fine (inclusi)."""
     zf = zipfile.ZipFile(zpath)
@@ -229,6 +250,7 @@ def build(zpath, inizio="00000000", fine="99999999"):
     for v in st_by_trip.values():
         v.sort(key=lambda r: int(r["stop_sequence"]))
     trips = [t for t in trips if st_by_trip.get(t["trip_id"])]
+    deduci_direzioni(trips, st_by_trip)
 
     # ---- calendari: tutte le date di servizio
     dates = defaultdict(set)
